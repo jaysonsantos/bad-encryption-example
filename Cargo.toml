@@ -1,0 +1,10 @@
+[package]
+name = "bad-encryption-example"
+version = "0.1.0"
+authors = ["Jayson Reis <santosdosreis@gmail.com>"]
+
+[dependencies]
+ring = "*"
+image = "*"
+num = "*"
+rayon = "*"
