@@ -4,7 +4,6 @@ extern crate image;
 
 use std::fs::File;
 use std::str;
-use std::sync::{Arc, Mutex};
 
 use image::{open, Pixel, ImageRgb8, ImageFormat};
 
@@ -15,18 +14,18 @@ use ring::pbkdf2;
 use ring::rand::SystemRandom;
 
 fn main() {
-    let nonces_every = vec![(1, "every pixel"),
-                            (2, "every 2 pixels"),
-                            (4, "every 4 pixels"),
-                            (8, "every 8 pixels"),
-                            (16, "every 16 pixels"),
-                            (128, "every 128 pixels"),
-                            (512, "every 512 pixels"),
-                            (1024, "every 1K pixels"),
-                            (1024 * 4, "every 4K pixels"),
-                            (1024 * 64, "every 64K pixels"),
-                            (1024 * 100, "every 100K pixels"),
-                            (1024 * 1024, "one per file")];
+    let nonces_every: Vec<(u32, &'static str)> = vec![(1, "every pixel"),
+                                                      (2, "every 2 pixels"),
+                                                      (4, "every 4 pixels"),
+                                                      (8, "every 8 pixels"),
+                                                      (16, "every 16 pixels"),
+                                                      (128, "every 128 pixels"),
+                                                      (512, "every 512 pixels"),
+                                                      (1024, "every 1K pixels"),
+                                                      (1024 * 4, "every 4K pixels"),
+                                                      (1024 * 64, "every 64K pixels"),
+                                                      (1024 * 100, "every 100K pixels"),
+                                                      (1024 * 1024, "one per file")];
     let mut reversed_nonces_every = nonces_every.clone();
     reversed_nonces_every.reverse();
 
@@ -60,38 +59,29 @@ fn main() {
                      &filename,
                      nonce_every);
             let mut nonce = [0; 12];
-            let mut i = 0;
+            let mut i = 0u32;
             let mut img = img.clone();
             let mut imgbuf = img.as_mut_rgb8().unwrap();
             for (_, _, pixel) in imgbuf.enumerate_pixels_mut() {
                 if i == 0 {
                     rand.fill(&mut nonce).unwrap();
                 }
-                let channel_counter = Arc::new(Mutex::new(0));
-                let c = channel_counter.clone();
-                pixel.apply(|i: u8| {
-                    let mut channel_count = c.lock().unwrap();
-                    *channel_count += 1;
-                    if *channel_count > 3 {
-                        return i;
-                    }
-
-                    let sealing_key = aead::SealingKey::new(&aead::CHACHA20_POLY1305, &key)
-                        .unwrap();
-                    let mut in_out: Vec<u8> = vec![];
+                let sealing_key = aead::SealingKey::new(&aead::CHACHA20_POLY1305, &key).unwrap();
+                let mut channels = pixel.channels_mut();
+                let mut in_out: Vec<u8> = vec![];
+                in_out.extend_from_slice(channels);
+                for i in 0..16 {
                     in_out.push(i);
-                    for i in 0..16 {
-                        in_out.push(i);
-                    }
-                    aead::seal_in_place(&sealing_key,
-                                        &nonce,
-                                        &ad,
-                                        &mut in_out,
-                                        aead::CHACHA20_POLY1305.tag_len())
-                            .unwrap();
-
-                    in_out[0]
-                });
+                }
+                aead::seal_in_place(&sealing_key,
+                                    &nonce,
+                                    &ad,
+                                    &mut in_out,
+                                    aead::CHACHA20_POLY1305.tag_len())
+                        .unwrap();
+                for channel_number in 0..channels.len() {
+                    channels[channel_number] = in_out[channel_number];
+                }
                 i += 1;
                 if i == nonce_every {
                     i = 0;
