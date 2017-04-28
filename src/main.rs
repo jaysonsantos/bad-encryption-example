@@ -70,9 +70,7 @@ fn main() {
                 let mut channels = pixel.channels_mut();
                 let mut in_out: Vec<u8> = vec![];
                 in_out.extend_from_slice(channels);
-                for i in 0..16 {
-                    in_out.push(i);
-                }
+                in_out.resize(channels.len() + 16, 0);
                 aead::seal_in_place(&sealing_key,
                                     &nonce,
                                     &ad,
